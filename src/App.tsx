@@ -13,6 +13,9 @@ import { LoginPage } from './pages/LoginPage';
 import { AddParkingSpot } from './pages/AddParkingSpot';
 import { EditParkingSpot } from './pages/EditParkingSpot';
 import { ManageAvailability } from './pages/ManageAvailability';
+import { SettingsPage } from './pages/SettingsPage';
+import { AdminBookingsPage } from './pages/AdminBookingsPage';
+import { AdminReviewsPage } from './pages/AdminReviewsPage';
 
 const AppContent: React.FC = () => {
   const { user, isLoading } = useAuth();
@@ -31,7 +34,7 @@ const AppContent: React.FC = () => {
         {/* Public Routes */}
         <Route 
           path="/login" 
-          element={user ? <Navigate to="/" replace /> : <LoginPage />} 
+          element={user ? <Navigate to={user.userType === 'owner' ? '/admin' : '/'} replace /> : <LoginPage />} 
         />
         
         {/* Protected Routes */}
@@ -40,11 +43,15 @@ const AppContent: React.FC = () => {
             <Navbar />
             <div className="pt-16">
               <Routes>
-                <Route path="/" element={<HomePage />} />
+                {/* Customer Routes */}
+                <Route path="/" element={
+                  user?.userType === 'owner' ? <Navigate to="/admin" replace /> : <HomePage />
+                } />
                 <Route path="/spot/:id" element={<ParkingSpotDetail />} />
                 <Route path="/book/:id" element={<BookingPage />} />
                 <Route path="/bookings" element={<BookingsPage />} />
                 <Route path="/profile" element={<ProfilePage />} />
+                <Route path="/settings" element={<SettingsPage />} />
                 
                 {/* Owner-only routes */}
                 <Route path="/admin" element={
@@ -65,6 +72,16 @@ const AppContent: React.FC = () => {
                 <Route path="/admin/availability/:id" element={
                   <ProtectedRoute requireOwner>
                     <ManageAvailability />
+                  </ProtectedRoute>
+                } />
+                <Route path="/admin/bookings" element={
+                  <ProtectedRoute requireOwner>
+                    <AdminBookingsPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/admin/reviews" element={
+                  <ProtectedRoute requireOwner>
+                    <AdminReviewsPage />
                   </ProtectedRoute>
                 } />
               </Routes>

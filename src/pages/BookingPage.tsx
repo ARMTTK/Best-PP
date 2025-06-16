@@ -84,10 +84,19 @@ export const BookingPage: React.FC = () => {
   }
 
   const calculateDuration = () => {
-    if (!startTime || !endTime) return 0;
-    const start = new Date(`2024-01-01 ${startTime}`);
-    const end = new Date(`2024-01-01 ${endTime}`);
-    return (end.getTime() - start.getTime()) / (1000 * 60 * 60); // hours
+    if (!startDate || !startTime || !endTime) return 0;
+    
+    const startDateTime = new Date(`${startDate}T${startTime}`);
+    const endDateTime = new Date(`${startDate}T${endTime}`);
+    
+    // Handle next day scenarios
+    if (endDateTime <= startDateTime) {
+      endDateTime.setDate(endDateTime.getDate() + 1);
+    }
+    
+    const diffMs = endDateTime.getTime() - startDateTime.getTime();
+    const hours = Math.max(0, diffMs / (1000 * 60 * 60)); // Ensure non-negative
+    return hours;
   };
 
   const calculateTotal = () => {
@@ -108,14 +117,19 @@ export const BookingPage: React.FC = () => {
     } else if (step === 'payment') {
       setIsProcessing(true);
       try {
-        const startDateTime = new Date(`${startDate}T${startTime}`).toISOString();
-        const endDateTime = new Date(`${startDate}T${endTime}`).toISOString();
+        const startDateTime = new Date(`${startDate}T${startTime}`);
+        let endDateTime = new Date(`${startDate}T${endTime}`);
+        
+        // Handle next day scenarios
+        if (endDateTime <= startDateTime) {
+          endDateTime.setDate(endDateTime.getDate() + 1);
+        }
 
         const booking = await database.createBooking({
           spotId: spot.id,
           userId: authUser!.id,
-          startTime: startDateTime,
-          endTime: endDateTime,
+          startTime: startDateTime.toISOString(),
+          endTime: endDateTime.toISOString(),
           vehicleId: selectedVehicle,
           totalCost: calculateTotal(),
           status: 'pending'
@@ -483,7 +497,7 @@ export const BookingPage: React.FC = () => {
                 onClick={handleBooking}
                 disabled={
                   isProcessing ||
-                  (step === 'time' && (!startDate || !startTime || !endTime || !selectedVehicle)) ||
+                  (step === 'time' && (!startDate || !startTime || !endTime || !selectedVehicle || calculateDuration() <= 0)) ||
                   (step === 'payment' && !paymentMethod)
                 }
                 className="flex-1 bg-blue-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"

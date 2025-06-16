@@ -2,14 +2,37 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { MapPin, Star, Car, Clock, Zap } from 'lucide-react';
 import { ParkingSpot } from '../types';
+import { database } from '../data/database';
 
 interface ParkingSpotCardProps {
   spot: ParkingSpot;
 }
 
 export const ParkingSpotCard: React.FC<ParkingSpotCardProps> = ({ spot }) => {
+  const [nextAvailable, setNextAvailable] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (spot.availableSlots === 0) {
+      database.getNextAvailableTime(spot.id).then(setNextAvailable);
+    }
+  }, [spot.id, spot.availableSlots]);
+
   const formatPrice = (price: number, type: string) => {
     return `$${price}/${type}`;
+  };
+
+  const formatNextAvailable = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffHours = Math.ceil((date.getTime() - now.getTime()) / (1000 * 60 * 60));
+    
+    if (diffHours < 1) {
+      return 'Available now';
+    } else if (diffHours < 24) {
+      return `Available in ${diffHours}h`;
+    } else {
+      return `Available ${date.toLocaleDateString()}`;
+    }
   };
 
   return (
@@ -63,12 +86,16 @@ export const ParkingSpotCard: React.FC<ParkingSpotCardProps> = ({ spot }) => {
                 ? 'bg-green-100 text-green-800'
                 : spot.availableSlots > 5
                 ? 'bg-yellow-100 text-yellow-800'
+                : spot.availableSlots > 0
+                ? 'bg-orange-100 text-orange-800'
                 : 'bg-red-100 text-red-800'
             }`}>
               {spot.availableSlots > 10 
                 ? 'Available' 
                 : spot.availableSlots > 0 
                 ? 'Limited' 
+                : nextAvailable 
+                ? formatNextAvailable(nextAvailable)
                 : 'Full'
               }
             </div>

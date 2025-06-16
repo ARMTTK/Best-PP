@@ -8,6 +8,7 @@ export const LoginPage: React.FC = () => {
   const [mode, setMode] = useState<'login' | 'customer-register' | 'owner-register'>('login');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -31,6 +32,10 @@ export const LoginPage: React.FC = () => {
       if (mode === 'login') {
         const success = await login(formData.email, formData.password);
         if (success) {
+          // Store remember me preference
+          if (rememberMe) {
+            localStorage.setItem('parkpass_remember', 'true');
+          }
           // Navigation will be handled by the auth context and route protection
           navigate('/');
         } else {
@@ -304,6 +309,27 @@ export const LoginPage: React.FC = () => {
                     {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                   </button>
                 </div>
+              </div>
+            )}
+
+            {/* Remember Me (Login only) */}
+            {mode === 'login' && (
+              <div className="flex items-center justify-between">
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                  />
+                  <span className="ml-2 text-sm text-gray-700">Remember me</span>
+                </label>
+                <button
+                  type="button"
+                  className="text-sm text-blue-600 hover:text-blue-800 transition-colors"
+                >
+                  Forgot password?
+                </button>
               </div>
             )}
 

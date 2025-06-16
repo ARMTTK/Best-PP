@@ -223,6 +223,10 @@ class MockDatabase {
     return this.data.bookings.filter(b => b.userId === userId);
   }
 
+  async getAllBookings(): Promise<Booking[]> {
+    return this.data.bookings;
+  }
+
   async getBookingByQRCode(qrCode: string): Promise<Booking | null> {
     return this.data.bookings.find(b => b.qrCode === qrCode) || null;
   }
@@ -253,6 +257,52 @@ class MockDatabase {
     return this.data.bookings[bookingIndex];
   }
 
+  async extendBooking(id: string, additionalHours: number): Promise<Booking | null> {
+    const bookingIndex = this.data.bookings.findIndex(b => b.id === id);
+    if (bookingIndex === -1) return null;
+
+    const booking = this.data.bookings[bookingIndex];
+    const newEndTime = new Date(booking.endTime);
+    newEndTime.setHours(newEndTime.getHours() + additionalHours);
+
+    // Check for conflicts with other bookings
+    const spot = await this.getParkingSpotById(booking.spotId);
+    if (!spot) return null;
+
+    const conflictingBookings = this.data.bookings.filter(b => 
+      b.spotId === booking.spotId && 
+      b.id !== booking.id &&
+      (b.status === 'active' || b.status === 'pending') &&
+      new Date(b.startTime) < newEndTime &&
+      new Date(b.endTime) > new Date(booking.endTime)
+    );
+
+    // Calculate available slots during extension period
+    const slotsNeeded = conflictingBookings.length + 1; // +1 for current booking
+    if (slotsNeeded > spot.totalSlots) {
+      throw new Error('Extension not possible due to conflicting bookings');
+    }
+
+    // Calculate additional cost
+    const spot_data = await this.getParkingSpotById(booking.spotId);
+    if (!spot_data) return null;
+
+    let additionalCost = 0;
+    if (spot_data.priceType === 'hour') {
+      additionalCost = additionalHours * spot_data.price;
+    } else if (spot_data.priceType === 'day') {
+      const additionalDays = Math.ceil(additionalHours / 24);
+      additionalCost = additionalDays * spot_data.price;
+    }
+
+    // Update booking
+    this.data.bookings[bookingIndex].endTime = newEndTime.toISOString();
+    this.data.bookings[bookingIndex].totalCost += additionalCost;
+
+    this.save();
+    return this.data.bookings[bookingIndex];
+  }
+
   // Review operations
   async createReview(reviewData: Omit<Review, 'id' | 'createdAt'>): Promise<Review> {
     const newReview: Review = {
@@ -278,6 +328,31 @@ class MockDatabase {
 
   async getReviewsBySpot(spotId: string): Promise<Review[]> {
     return this.data.reviews.filter(r => r.spotId === spotId);
+  }
+
+  // Helper method to get next available time for a spot
+  async getNextAvailableTime(spotId: string): Promise<string | null> {
+    const spot = await this.getParkingSpotById(spotId);
+    if (!spot) return null;
+
+    if (spot.availableSlots > 0) {
+      return new Date().toISOString(); // Available now
+    }
+
+    // Find the earliest ending booking
+    const activeBookings = this.data.bookings.filter(b => 
+      b.spotId === spotId && 
+      (b.status === 'active' || b.status === 'pending') &&
+      new Date(b.endTime) > new Date()
+    );
+
+    if (activeBookings.length === 0) {
+      return new Date().toISOString(); // Available now
+    }
+
+    // Sort by end time and return the earliest
+    activeBookings.sort((a, b) => new Date(a.endTime).getTime() - new Date(b.endTime).getTime());
+    return activeBookings[0].endTime;
   }
 }
 

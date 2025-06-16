@@ -27,7 +27,8 @@ import {
   Settings,
   FileText,
   PieChart,
-  CalendarDays
+  CalendarDays,
+  MessageSquare
 } from 'lucide-react';
 import { QRScanner } from '../components/QRScanner';
 import { database } from '../data/database';
@@ -53,11 +54,15 @@ export const AdminDashboard: React.FC = () => {
     try {
       const [ownerSpots, allBookings] = await Promise.all([
         database.getParkingSpotsByOwner(user!.id),
-        database.getBookingsByUser(user!.id) // This would need to be modified to get bookings for owner's spots
+        database.getAllBookings()
       ]);
       
+      // Filter bookings for owner's spots
+      const spotIds = ownerSpots.map(spot => spot.id);
+      const ownerBookings = allBookings.filter(booking => spotIds.includes(booking.spotId));
+      
       setSpots(ownerSpots);
-      setBookings(allBookings);
+      setBookings(ownerBookings);
     } catch (error) {
       console.error('Error loading dashboard data:', error);
     } finally {
@@ -68,7 +73,7 @@ export const AdminDashboard: React.FC = () => {
   const stats = [
     { 
       label: 'Today\'s Revenue', 
-      value: '$1,240', 
+      value: `$${bookings.filter(b => new Date(b.startTime).toDateString() === new Date().toDateString()).reduce((sum, b) => sum + b.totalCost, 0)}`, 
       change: '+15%', 
       icon: DollarSign, 
       color: 'text-green-600' 
@@ -89,14 +94,16 @@ export const AdminDashboard: React.FC = () => {
     },
     { 
       label: 'Avg Rating', 
-      value: '4.6', 
+      value: spots.length > 0 ? (spots.reduce((sum, spot) => sum + spot.rating, 0) / spots.length).toFixed(1) : '0', 
       change: '+0.2', 
       icon: Star, 
       color: 'text-yellow-600' 
     },
   ];
 
-  const todayBookings = bookings.slice(0, 3); // Mock today's bookings
+  const todayBookings = bookings.filter(b => 
+    new Date(b.startTime).toDateString() === new Date().toDateString()
+  ).slice(0, 3);
 
   const handleQRScan = (data: string) => {
     setScanResult(data);
@@ -379,8 +386,22 @@ export const AdminDashboard: React.FC = () => {
               { id: 'home', label: 'Home', icon: QrCode },
               { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
               { id: 'spots', label: 'My Spots', icon: MapPin },
+              { id: 'bookings', label: 'Bookings', icon: Calendar, link: '/admin/bookings' },
+              { id: 'reviews', label: 'Reviews', icon: MessageSquare, link: '/admin/reviews' },
             ].map((tab) => {
               const Icon = tab.icon;
+              if (tab.link) {
+                return (
+                  <Link
+                    key={tab.id}
+                    to={tab.link}
+                    className="flex items-center space-x-2 py-4 px-6 font-medium text-gray-600 hover:text-gray-900 transition-colors whitespace-nowrap"
+                  >
+                    <Icon className="h-5 w-5" />
+                    <span>{tab.label}</span>
+                  </Link>
+                );
+              }
               return (
                 <button
                   key={tab.id}

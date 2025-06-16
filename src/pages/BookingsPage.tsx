@@ -96,15 +96,14 @@ export const BookingsPage: React.FC = () => {
 
   const handleExtendBooking = async (bookingId: string) => {
     try {
-      // In a real app, this would extend the booking and update the cost
-      console.log(`Extending booking ${bookingId} by ${extendHours} hours`);
+      await database.extendBooking(bookingId, extendHours);
       alert(`Booking extended by ${extendHours} hour(s) successfully!`);
       setShowExtendModal(null);
       setExtendHours(1);
       await loadBookings(); // Reload bookings
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error extending booking:', error);
-      alert('Error extending booking. Please try again.');
+      alert(error.message || 'Error extending booking. Please try again.');
     }
   };
 
