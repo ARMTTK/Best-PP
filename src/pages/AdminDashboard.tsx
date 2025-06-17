@@ -37,7 +37,7 @@ import { ParkingSpot, Booking } from '../types';
 
 export const AdminDashboard: React.FC = () => {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'home' | 'dashboard' | 'spots' | 'bookings' | 'reviews' | 'reports' | 'settings'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'dashboard' | 'spots'>('home');
   const [showQRScanner, setShowQRScanner] = useState(false);
   const [scanResult, setScanResult] = useState<string | null>(null);
   const [spots, setSpots] = useState<ParkingSpot[]>([]);

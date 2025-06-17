@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
@@ -9,9 +9,11 @@ import {
   Trash2,
   AlertCircle,
   CheckCircle,
-  XCircle
+  XCircle,
+  Save
 } from 'lucide-react';
-import { mockParkingSpots } from '../data/mockData';
+import { database } from '../data/database';
+import { ParkingSpot } from '../types';
 
 interface TimeSlot {
   id: string;
@@ -23,11 +25,21 @@ interface TimeSlot {
   slotsAffected: number;
 }
 
+interface WeeklySchedule {
+  [key: string]: {
+    enabled: boolean;
+    startTime: string;
+    endTime: string;
+  };
+}
+
 export const ManageAvailability: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [spot, setSpot] = useState<ParkingSpot | null>(null);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [showAddBlock, setShowAddBlock] = useState(false);
+  const [showWeeklySchedule, setShowWeeklySchedule] = useState(false);
   const [newBlock, setNewBlock] = useState({
     date: new Date().toISOString().split('T')[0],
     startTime: '',
@@ -37,32 +49,66 @@ export const ManageAvailability: React.FC = () => {
     slotsAffected: 1
   });
 
-  const spot = mockParkingSpots.find(s => s.id === id);
+  const [weeklySchedule, setWeeklySchedule] = useState<WeeklySchedule>({
+    monday: { enabled: true, startTime: '08:00', endTime: '18:00' },
+    tuesday: { enabled: true, startTime: '08:00', endTime: '18:00' },
+    wednesday: { enabled: true, startTime: '08:00', endTime: '18:00' },
+    thursday: { enabled: true, startTime: '08:00', endTime: '18:00' },
+    friday: { enabled: true, startTime: '08:00', endTime: '18:00' },
+    saturday: { enabled: true, startTime: '09:00', endTime: '17:00' },
+    sunday: { enabled: false, startTime: '10:00', endTime: '16:00' }
+  });
 
   // Mock time slots data
-  const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([
-    {
-      id: '1',
-      date: '2024-01-20',
-      startTime: '14:00',
-      endTime: '16:00',
-      status: 'blocked',
-      reason: 'Private event',
-      slotsAffected: 10
-    },
-    {
-      id: '2',
-      date: '2024-01-22',
-      startTime: '08:00',
-      endTime: '12:00',
-      status: 'maintenance',
-      reason: 'Cleaning and maintenance',
-      slotsAffected: 25
+  const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
+
+  useEffect(() => {
+    if (id) {
+      loadSpotData();
     }
-  ]);
+  }, [id]);
+
+  const loadSpotData = async () => {
+    try {
+      const spotData = await database.getParkingSpotById(id!);
+      setSpot(spotData);
+      
+      // Load existing time slots (in real app, this would come from database)
+      const mockSlots: TimeSlot[] = [
+        {
+          id: '1',
+          date: '2024-01-20',
+          startTime: '14:00',
+          endTime: '16:00',
+          status: 'blocked',
+          reason: 'Private event',
+          slotsAffected: 10
+        },
+        {
+          id: '2',
+          date: '2024-01-22',
+          startTime: '08:00',
+          endTime: '12:00',
+          status: 'maintenance',
+          reason: 'Cleaning and maintenance',
+          slotsAffected: 25
+        }
+      ];
+      setTimeSlots(mockSlots);
+    } catch (error) {
+      console.error('Error loading spot data:', error);
+    }
+  };
 
   if (!spot) {
-    return <div>Parking spot not found</div>;
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading availability settings...</p>
+        </div>
+      </div>
+    );
   }
 
   const handleAddBlock = (e: React.FormEvent) => {
@@ -89,6 +135,23 @@ export const ManageAvailability: React.FC = () => {
     }
   };
 
+  const handleWeeklyScheduleChange = (day: string, field: string, value: any) => {
+    setWeeklySchedule(prev => ({
+      ...prev,
+      [day]: {
+        ...prev[day],
+        [field]: value
+      }
+    }));
+  };
+
+  const saveWeeklySchedule = () => {
+    // In real app, save to database
+    console.log('Saving weekly schedule:', weeklySchedule);
+    alert('Weekly schedule saved successfully!');
+    setShowWeeklySchedule(false);
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'available': return 'text-green-600 bg-green-100';
@@ -108,6 +171,16 @@ export const ManageAvailability: React.FC = () => {
   };
 
   const filteredSlots = timeSlots.filter(slot => slot.date === selectedDate);
+
+  const dayNames = {
+    monday: 'Monday',
+    tuesday: 'Tuesday', 
+    wednesday: 'Wednesday',
+    thursday: 'Thursday',
+    friday: 'Friday',
+    saturday: 'Saturday',
+    sunday: 'Sunday'
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -144,29 +217,38 @@ export const ManageAvailability: React.FC = () => {
             </div>
           </div>
 
+          {/* Action Buttons */}
+          <div className="flex gap-4 mb-6">
+            <button
+              onClick={() => setShowWeeklySchedule(true)}
+              className="flex items-center space-x-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
+            >
+              <Calendar className="h-4 w-4" />
+              <span>Weekly Schedule</span>
+            </button>
+            <button
+              onClick={() => setShowAddBlock(true)}
+              className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Block Time</span>
+            </button>
+          </div>
+
           {/* Date Selector */}
           <div className="mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center space-x-4">
-                <Calendar className="h-5 w-5 text-gray-600" />
-                <label className="block text-sm font-medium text-gray-700">
-                  Select Date
-                </label>
-                <input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  min={new Date().toISOString().split('T')[0]}
-                  className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                />
-              </div>
-              <button
-                onClick={() => setShowAddBlock(true)}
-                className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                <Plus className="h-4 w-4" />
-                <span>Block Time</span>
-              </button>
+            <div className="flex items-center space-x-4 mb-4">
+              <Calendar className="h-5 w-5 text-gray-600" />
+              <label className="block text-sm font-medium text-gray-700">
+                Select Date
+              </label>
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                min={new Date().toISOString().split('T')[0]}
+                className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              />
             </div>
           </div>
 
@@ -281,6 +363,89 @@ export const ManageAvailability: React.FC = () => {
             )}
           </div>
         </div>
+
+        {/* Weekly Schedule Modal */}
+        {showWeeklySchedule && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold text-gray-900">Weekly Operating Schedule</h3>
+                  <button
+                    onClick={() => setShowWeeklySchedule(false)}
+                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    <XCircle className="h-5 w-5 text-gray-500" />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  {Object.entries(dayNames).map(([key, dayName]) => (
+                    <div key={key} className="border border-gray-200 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center space-x-3">
+                          <input
+                            type="checkbox"
+                            checked={weeklySchedule[key].enabled}
+                            onChange={(e) => handleWeeklyScheduleChange(key, 'enabled', e.target.checked)}
+                            className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                          />
+                          <span className="font-medium text-gray-900">{dayName}</span>
+                        </div>
+                        {weeklySchedule[key].enabled && (
+                          <span className="text-sm text-green-600 font-medium">Open</span>
+                        )}
+                      </div>
+                      
+                      {weeklySchedule[key].enabled && (
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Opening Time
+                            </label>
+                            <input
+                              type="time"
+                              value={weeklySchedule[key].startTime}
+                              onChange={(e) => handleWeeklyScheduleChange(key, 'startTime', e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Closing Time
+                            </label>
+                            <input
+                              type="time"
+                              value={weeklySchedule[key].endTime}
+                              onChange={(e) => handleWeeklyScheduleChange(key, 'endTime', e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex gap-3 pt-6 border-t border-gray-200 mt-6">
+                  <button
+                    onClick={() => setShowWeeklySchedule(false)}
+                    className="flex-1 border border-gray-200 py-3 px-4 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={saveWeeklySchedule}
+                    className="flex-1 bg-green-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-green-700 transition-colors flex items-center justify-center space-x-2"
+                  >
+                    <Save className="h-4 w-4" />
+                    <span>Save Schedule</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Add Block Modal */}
         {showAddBlock && (

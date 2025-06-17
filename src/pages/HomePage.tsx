@@ -10,6 +10,8 @@ export const HomePage: React.FC = () => {
   const [filteredSpots, setFilteredSpots] = useState<ParkingSpot[]>([]);
   const [viewMode, setViewMode] = useState<'grid' | 'map'>('grid');
   const [isLoading, setIsLoading] = useState(true);
+  const [currentQuery, setCurrentQuery] = useState('');
+  const [currentFilters, setCurrentFilters] = useState<any>(null);
 
   useEffect(() => {
     loadParkingSpots();
@@ -27,25 +29,24 @@ export const HomePage: React.FC = () => {
     }
   };
 
-  const handleSearch = (query: string) => {
-    if (!query.trim()) {
-      setFilteredSpots(spots);
-      return;
+  const handleSearch = async (query: string) => {
+    setCurrentQuery(query);
+    try {
+      const searchResults = await database.searchParkingSpots(query, currentFilters);
+      setFilteredSpots(searchResults);
+    } catch (error) {
+      console.error('Error searching parking spots:', error);
     }
-
-    const filtered = spots.filter(spot =>
-      spot.name.toLowerCase().includes(query.toLowerCase()) ||
-      spot.address.toLowerCase().includes(query.toLowerCase()) ||
-      spot.description.toLowerCase().includes(query.toLowerCase())
-    );
-    setFilteredSpots(filtered);
   };
 
-  const handleFilter = (filters: any) => {
-    console.log('Applying filters:', filters);
-    // In a real app, this would apply filters
-    // For now, we'll just keep the current spots
-    setFilteredSpots(spots);
+  const handleFilter = async (filters: any) => {
+    setCurrentFilters(filters);
+    try {
+      const searchResults = await database.searchParkingSpots(currentQuery, filters);
+      setFilteredSpots(searchResults);
+    } catch (error) {
+      console.error('Error filtering parking spots:', error);
+    }
   };
 
   const handleFindNearMe = () => {
@@ -88,6 +89,12 @@ export const HomePage: React.FC = () => {
             <span className="text-gray-600">
               Found {filteredSpots.length} parking spot{filteredSpots.length !== 1 ? 's' : ''}
             </span>
+            {(currentQuery || currentFilters) && (
+              <span className="text-sm text-blue-600 ml-2">
+                {currentQuery && `for "${currentQuery}"`}
+                {currentFilters && Object.values(currentFilters).some(v => v !== 'all' && v !== false && (Array.isArray(v) ? v.length > 0 : true)) && ' with filters applied'}
+              </span>
+            )}
           </div>
           
           <div className="flex items-center bg-white rounded-lg border border-gray-200 p-1">
@@ -131,9 +138,24 @@ export const HomePage: React.FC = () => {
               <h3 className="text-lg font-semibold text-gray-900 mb-2">
                 No parking spots found
               </h3>
-              <p className="text-gray-600">
-                Try adjusting your search criteria or check back later for new listings.
+              <p className="text-gray-600 mb-4">
+                {currentQuery || currentFilters 
+                  ? 'Try adjusting your search criteria or filters to see more results.'
+                  : 'Try adjusting your search criteria or check back later for new listings.'
+                }
               </p>
+              {(currentQuery || currentFilters) && (
+                <button
+                  onClick={() => {
+                    setCurrentQuery('');
+                    setCurrentFilters(null);
+                    setFilteredSpots(spots);
+                  }}
+                  className="text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  Clear search and filters
+                </button>
+              )}
             </div>
           )
         ) : (

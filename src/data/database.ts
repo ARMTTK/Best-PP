@@ -155,6 +155,15 @@ class MockDatabase {
     return this.data.users.find(u => u.id === id) || null;
   }
 
+  async updateUser(id: string, updates: Partial<User>): Promise<User | null> {
+    const userIndex = this.data.users.findIndex(u => u.id === id);
+    if (userIndex === -1) return null;
+
+    this.data.users[userIndex] = { ...this.data.users[userIndex], ...updates };
+    this.save();
+    return this.data.users[userIndex];
+  }
+
   // Parking spot operations
   async getAllParkingSpots(): Promise<ParkingSpot[]> {
     return this.data.parkingSpots.filter(spot => spot.isActive);
@@ -353,6 +362,78 @@ class MockDatabase {
     // Sort by end time and return the earliest
     activeBookings.sort((a, b) => new Date(a.endTime).getTime() - new Date(b.endTime).getTime());
     return activeBookings[0].endTime;
+  }
+
+  // Search and filter operations
+  async searchParkingSpots(query: string, filters?: any): Promise<ParkingSpot[]> {
+    let spots = this.data.parkingSpots.filter(spot => spot.isActive);
+
+    // Apply search query
+    if (query.trim()) {
+      const searchTerm = query.toLowerCase();
+      spots = spots.filter(spot =>
+        spot.name.toLowerCase().includes(searchTerm) ||
+        spot.address.toLowerCase().includes(searchTerm) ||
+        spot.description.toLowerCase().includes(searchTerm) ||
+        spot.amenities.some(amenity => amenity.toLowerCase().includes(searchTerm))
+      );
+    }
+
+    // Apply filters if provided
+    if (filters) {
+      // Price range filter
+      if (filters.priceRange && filters.priceRange[1] < 500) {
+        spots = spots.filter(spot => spot.price <= filters.priceRange[1]);
+      }
+
+      // Parking type filter
+      if (filters.parkingType && filters.parkingType !== 'all') {
+        spots = spots.filter(spot => {
+          const hasAmenity = spot.amenities.some(amenity => 
+            amenity.toLowerCase().includes(filters.parkingType.toLowerCase())
+          );
+          return hasAmenity;
+        });
+      }
+
+      // Amenities filter
+      if (filters.amenities && filters.amenities.length > 0) {
+        spots = spots.filter(spot =>
+          filters.amenities.every((amenity: string) =>
+            spot.amenities.includes(amenity)
+          )
+        );
+      }
+
+      // Available only filter
+      if (filters.availableOnly) {
+        spots = spots.filter(spot => spot.availableSlots > 0);
+      }
+
+      // Sort results
+      if (filters.sortBy) {
+        switch (filters.sortBy) {
+          case 'price_low':
+            spots.sort((a, b) => a.price - b.price);
+            break;
+          case 'price_high':
+            spots.sort((a, b) => b.price - a.price);
+            break;
+          case 'rating':
+            spots.sort((a, b) => b.rating - a.rating);
+            break;
+          case 'availability':
+            spots.sort((a, b) => b.availableSlots - a.availableSlots);
+            break;
+          case 'distance':
+          default:
+            // For demo purposes, keep original order
+            break;
+        }
+      }
+    }
+
+    return spots;
   }
 }
 

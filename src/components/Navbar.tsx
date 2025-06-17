@@ -1,7 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { MapPin, User, Calendar, Settings, Home, LogOut, Bell, Clock, Menu, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+
+interface Notification {
+  id: string;
+  type: 'booking_reminder' | 'extension_reminder' | 'owner_notification' | 'system';
+  title: string;
+  message: string;
+  time: string;
+  unread: boolean;
+  actionUrl?: string;
+}
 
 export const Navbar: React.FC = () => {
   const location = useLocation();
@@ -10,8 +20,127 @@ export const Navbar: React.FC = () => {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   
   const isActive = (path: string) => location.pathname === path;
+
+  useEffect(() => {
+    // Load notifications for the current user
+    loadNotifications();
+    
+    // Set up notification checking interval (every 30 seconds)
+    const interval = setInterval(checkForNotifications, 30000);
+    
+    return () => clearInterval(interval);
+  }, [user]);
+
+  const loadNotifications = () => {
+    // Mock notifications - in real app, fetch from API
+    const mockNotifications: Notification[] = [
+      {
+        id: '1',
+        type: 'booking_reminder',
+        title: 'Parking Session Starting Soon',
+        message: 'Your parking at Central Plaza starts in 30 minutes',
+        time: '5 min ago',
+        unread: true,
+        actionUrl: '/bookings'
+      },
+      {
+        id: '2',
+        type: 'extension_reminder',
+        title: 'Extend Your Parking?',
+        message: 'Your parking session ends in 30 minutes. Would you like to extend?',
+        time: '15 min ago',
+        unread: true,
+        actionUrl: '/bookings'
+      },
+      {
+        id: '3',
+        type: 'owner_notification',
+        title: 'Extension Request',
+        message: 'John Doe wants to extend parking at your Central Plaza spot',
+        time: '1 hour ago',
+        unread: false,
+        actionUrl: '/admin/bookings'
+      },
+      {
+        id: '4',
+        type: 'system',
+        title: 'Payment Receipt',
+        message: 'Payment receipt for booking #12345 is now available',
+        time: '2 hours ago',
+        unread: false,
+        actionUrl: '/profile'
+      }
+    ];
+    
+    // Filter notifications based on user type
+    const filteredNotifications = mockNotifications.filter(notification => {
+      if (user?.userType === 'owner') {
+        return ['owner_notification', 'system'].includes(notification.type);
+      } else {
+        return ['booking_reminder', 'extension_reminder', 'system'].includes(notification.type);
+      }
+    });
+    
+    setNotifications(filteredNotifications);
+  };
+
+  const checkForNotifications = () => {
+    // This function would check for new notifications
+    // For demo purposes, we'll simulate checking booking times
+    
+    if (!user) return;
+    
+    // In a real app, this would:
+    // 1. Check current time against user's bookings
+    // 2. Send notifications 30 minutes before start/end times
+    // 3. Check for owner notifications about extension requests
+    
+    console.log('Checking for new notifications...');
+    
+    // Simulate a new notification occasionally
+    if (Math.random() < 0.1) { // 10% chance
+      const newNotification: Notification = {
+        id: Date.now().toString(),
+        type: user.userType === 'owner' ? 'owner_notification' : 'booking_reminder',
+        title: user.userType === 'owner' ? 'New Booking' : 'Parking Reminder',
+        message: user.userType === 'owner' 
+          ? 'New booking received for your parking spot'
+          : 'Don\'t forget about your upcoming parking reservation',
+        time: 'Just now',
+        unread: true,
+        actionUrl: user.userType === 'owner' ? '/admin/bookings' : '/bookings'
+      };
+      
+      setNotifications(prev => [newNotification, ...prev]);
+    }
+  };
+
+  const markAsRead = (notificationId: string) => {
+    setNotifications(prev => 
+      prev.map(notification => 
+        notification.id === notificationId 
+          ? { ...notification, unread: false }
+          : notification
+      )
+    );
+  };
+
+  const markAllAsRead = () => {
+    setNotifications(prev => 
+      prev.map(notification => ({ ...notification, unread: false }))
+    );
+  };
+
+  const handleNotificationClick = (notification: Notification) => {
+    markAsRead(notification.id);
+    if (notification.actionUrl) {
+      navigate(notification.actionUrl);
+    }
+    setShowNotifications(false);
+  };
 
   const handleLogout = () => {
     logout();
@@ -20,13 +149,7 @@ export const Navbar: React.FC = () => {
     navigate('/login');
   };
 
-  const mockNotifications = [
-    { id: 1, message: 'Booking confirmed for Central Plaza', time: '5 min ago', unread: true },
-    { id: 2, message: 'Parking session ending in 30 minutes', time: '15 min ago', unread: true },
-    { id: 3, message: 'Payment receipt available', time: '1 hour ago', unread: false },
-  ];
-
-  const unreadCount = mockNotifications.filter(n => n.unread).length;
+  const unreadCount = notifications.filter(n => n.unread).length;
 
   // Function to close all dropdowns/menus
   const closeAllMenus = () => {
@@ -37,6 +160,20 @@ export const Navbar: React.FC = () => {
 
   // Condition to show background overlay
   const showBackgroundOverlay = showUserMenu || showNotifications || showMobileMenu;
+
+  const getNotificationIcon = (type: string) => {
+    switch (type) {
+      case 'booking_reminder':
+      case 'extension_reminder':
+        return '🚗';
+      case 'owner_notification':
+        return '👤';
+      case 'system':
+        return '📄';
+      default:
+        return '🔔';
+    }
+  };
 
   return (
     <>
@@ -68,28 +205,62 @@ export const Navbar: React.FC = () => {
                 </button>
 
                 {showNotifications && (
-                  <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
-                    <div className="p-4 border-b border-gray-200">
+                  <div className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-lg border border-gray-200 z-50 max-h-96 overflow-hidden">
+                    <div className="p-4 border-b border-gray-200 flex items-center justify-between">
                       <h3 className="font-semibold text-gray-900">Notifications</h3>
+                      {unreadCount > 0 && (
+                        <button
+                          onClick={markAllAsRead}
+                          className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                        >
+                          Mark all read
+                        </button>
+                      )}
                     </div>
                     <div className="max-h-64 overflow-y-auto">
-                      {mockNotifications.map((notification) => (
-                        <div
-                          key={notification.id}
-                          className={`p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors ${
-                            notification.unread ? 'bg-blue-50' : ''
-                          }`}
-                        >
-                          <p className="text-sm text-gray-900">{notification.message}</p>
-                          <div className="flex items-center space-x-1 mt-1">
-                            <Clock className="h-3 w-3 text-gray-400" />
-                            <span className="text-xs text-gray-500">{notification.time}</span>
+                      {notifications.length > 0 ? (
+                        notifications.map((notification) => (
+                          <div
+                            key={notification.id}
+                            onClick={() => handleNotificationClick(notification)}
+                            className={`p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer ${
+                              notification.unread ? 'bg-blue-50' : ''
+                            }`}
+                          >
+                            <div className="flex items-start space-x-3">
+                              <span className="text-lg">{getNotificationIcon(notification.type)}</span>
+                              <div className="flex-1 min-w-0">
+                                <p className={`text-sm font-medium ${notification.unread ? 'text-gray-900' : 'text-gray-700'}`}>
+                                  {notification.title}
+                                </p>
+                                <p className="text-sm text-gray-600 mt-1">{notification.message}</p>
+                                <div className="flex items-center space-x-1 mt-2">
+                                  <Clock className="h-3 w-3 text-gray-400" />
+                                  <span className="text-xs text-gray-500">{notification.time}</span>
+                                </div>
+                              </div>
+                              {notification.unread && (
+                                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                              )}
+                            </div>
                           </div>
+                        ))
+                      ) : (
+                        <div className="p-8 text-center text-gray-500">
+                          <Bell className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                          <p>No notifications yet</p>
                         </div>
-                      ))}
+                      )}
                     </div>
                     <div className="p-3 border-t border-gray-200">
-                      <button className="text-sm text-blue-600 hover:text-blue-800 font-medium">
+                      <button 
+                        onClick={() => {
+                          setShowNotifications(false);
+                          // In a real app, navigate to a dedicated notifications page
+                          console.log('Navigate to all notifications page');
+                        }}
+                        className="text-sm text-blue-600 hover:text-blue-800 font-medium w-full text-center"
+                      >
                         View all notifications
                       </button>
                     </div>
@@ -301,30 +472,60 @@ export const Navbar: React.FC = () => {
 
         {/* Mobile Notifications Dropdown */}
         {showNotifications && (
-          <div className="md:hidden fixed left-0 right-0 top-16 bg-white border-b border-gray-200 shadow-lg z-50">
-            <div className="p-4 border-b border-gray-200">
+          <div className="md:hidden fixed left-0 right-0 top-16 bg-white border-b border-gray-200 shadow-lg z-50 max-h-80 overflow-hidden">
+            <div className="p-4 border-b border-gray-200 flex items-center justify-between">
               <h3 className="font-semibold text-gray-900">Notifications</h3>
+              {unreadCount > 0 && (
+                <button
+                  onClick={markAllAsRead}
+                  className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  Mark all read
+                </button>
+              )}
             </div>
             <div className="max-h-64 overflow-y-auto">
-              {mockNotifications.map((notification) => (
-                <div
-                  key={notification.id}
-                  className={`p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors ${
-                    notification.unread ? 'bg-blue-50' : ''
-                  }`}
-                >
-                  <p className="text-sm text-gray-900">{notification.message}</p>
-                  <div className="flex items-center space-x-1 mt-1">
-                    <Clock className="h-3 w-3 text-gray-400" />
-                    <span className="text-xs text-gray-500">{notification.time}</span>
+              {notifications.length > 0 ? (
+                notifications.map((notification) => (
+                  <div
+                    key={notification.id}
+                    onClick={() => handleNotificationClick(notification)}
+                    className={`p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer ${
+                      notification.unread ? 'bg-blue-50' : ''
+                    }`}
+                  >
+                    <div className="flex items-start space-x-3">
+                      <span className="text-lg">{getNotificationIcon(notification.type)}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-medium ${notification.unread ? 'text-gray-900' : 'text-gray-700'}`}>
+                          {notification.title}
+                        </p>
+                        <p className="text-sm text-gray-600 mt-1">{notification.message}</p>
+                        <div className="flex items-center space-x-1 mt-2">
+                          <Clock className="h-3 w-3 text-gray-400" />
+                          <span className="text-xs text-gray-500">{notification.time}</span>
+                        </div>
+                      </div>
+                      {notification.unread && (
+                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                      )}
+                    </div>
                   </div>
+                ))
+              ) : (
+                <div className="p-8 text-center text-gray-500">
+                  <Bell className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                  <p>No notifications yet</p>
                 </div>
-              ))}
+              )}
             </div>
             <div className="p-3 border-t border-gray-200">
               <button
-                className="text-sm text-blue-600 hover:text-blue-800 font-medium"
-                onClick={() => setShowNotifications(false)}
+                className="text-sm text-blue-600 hover:text-blue-800 font-medium w-full text-center"
+                onClick={() => {
+                  setShowNotifications(false);
+                  console.log('Navigate to all notifications page');
+                }}
               >
                 View all notifications
               </button>
